@@ -19,6 +19,9 @@ private const val TAG = "usbTest"
 @SuppressLint("SetTextI18n")
 class MainActivity : AppCompatActivity() {
 
+    private val aliveMessage: ByteArray = byteArrayOf(2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    private val readVersion: ByteArray = byteArrayOf(2, 9, 0, 4, 0, 0, 0, 0, 0, 2, 3, 15, 0, 0)
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var usbManager: UsbManager
 
@@ -108,17 +111,7 @@ class MainActivity : AppCompatActivity() {
         binding.statusText.text = sb.toString()
     }
 
-    private fun doSomething() {
-        if (1 != usbManager.deviceList.size) {
-            addToLog("# of devices <> 1")
-            return
-        }
-        val key = usbManager.deviceList.keys.first()
-        val device = usbManager.deviceList[key]
-        if (device == null) {
-            addToLog("usbDevices == null")
-            return
-        }
+    private fun printInterfaceAndEndpointsData(device: UsbDevice) {
         device.getInterface(0).also { intf ->
             val sb = StringBuilder()
             sb.append("id: ${intf.id}\n")
@@ -128,7 +121,7 @@ class MainActivity : AppCompatActivity() {
             sb.append("interfaceProtocol: ${intf.interfaceProtocol}\n")
             sb.append("alternateSetting: ${intf.alternateSetting}\n")
             sb.append("endpointCount: ${intf.endpointCount}\n")
-            sb.append("====")
+            sb.append("====\n")
 
             intf.getEndpoint(0)?.also { endpoint ->
                 sb.append("endpoint0 address: ${endpoint.address}\n")
@@ -150,5 +143,43 @@ class MainActivity : AppCompatActivity() {
             }
             binding.statusText.text = sb.toString()
         }
+    }
+
+    private fun doSomething() {
+        if (1 != usbManager.deviceList.size) {
+            addToLog("# of devices <> 1")
+            return
+        }
+        val key = usbManager.deviceList.keys.first()
+        val device = usbManager.deviceList[key]
+        if (device == null) {
+            addToLog("usbDevices == null")
+            return
+        }
+        printInterfaceAndEndpointsData(device)
+
+        val inEndpoint = device.getInterface(0).getEndpoint(0)
+        val outEndpoint = device.getInterface(0).getEndpoint(1)
+
+        val connection = usbManager.openDevice(device)
+        if (connection == null) {
+            addToLog("Error: connection is null!")
+            return
+        }
+        val claimResult = connection.claimInterface(device.getInterface(0), true)
+        if (!claimResult) {
+            addToLog("Error: claimInterface failed!")
+            connection.close()
+            return
+        }
+
+        var result = connection.bulkTransfer(outEndpoint, aliveMessage, aliveMessage.size, 0)
+        addToLog("alive result = $result")
+        result = connection.bulkTransfer(outEndpoint, readVersion, readVersion.size, 0)
+        addToLog("readVersion result = $result")
+
+        val response = ByteArray(64)
+        result = connection.bulkTransfer(inEndpoint, response, response.size, 3000)
+        addToLog("response result = $result")
     }
 }
