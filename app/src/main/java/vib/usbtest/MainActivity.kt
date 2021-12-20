@@ -55,6 +55,10 @@ class MainActivity : AppCompatActivity() {
         binding.testButton.setOnClickListener {
             printStatus()
         }
+
+        binding.doButton.setOnClickListener {
+            doSomething()
+        }
     }
 
     private fun onActionUsbPermission(broadcastReceiver: BroadcastReceiver) {
@@ -104,7 +108,27 @@ class MainActivity : AppCompatActivity() {
         binding.statusText.text = sb.toString()
     }
 
-    private fun sendSomething() {
-
+    private fun doSomething() {
+        if (1 != usbManager.deviceList.size) {
+            addToLog("# of devices <> 1")
+            return
+        }
+        val key = usbManager.deviceList.keys.first()
+        val device = usbManager.deviceList[key]
+        if (device == null) {
+            addToLog("usbDevices == null")
+            return
+        }
+        device.getInterface(0).also { intf ->
+            val sb = StringBuilder()
+            sb.append("id: ${intf.id}\n")
+            sb.append("name: ${intf.name}\n")
+            sb.append("interfaceClass: ${intf.interfaceClass}\n")
+            sb.append("interfaceSubclass: ${intf.interfaceSubclass}\n")
+            sb.append("interfaceProtocol: ${intf.interfaceProtocol}\n")
+            sb.append("alternateSetting: ${intf.alternateSetting}\n")
+            sb.append("endpointCount: ${intf.endpointCount}\n")
+            binding.statusText.text = sb.toString()
+        }
     }
 }
