@@ -128,6 +128,26 @@ class MainActivity : AppCompatActivity() {
             sb.append("interfaceProtocol: ${intf.interfaceProtocol}\n")
             sb.append("alternateSetting: ${intf.alternateSetting}\n")
             sb.append("endpointCount: ${intf.endpointCount}\n")
+            sb.append("====")
+
+            intf.getEndpoint(0)?.also { endpoint ->
+                sb.append("endpoint0 address: ${endpoint.address}\n")
+                sb.append("endpoint0 attributes: ${endpoint.attributes}\n")
+                sb.append("endpoint0 direction: ${endpoint.direction}\n")
+                sb.append("endpoint0 endpointNumber: ${endpoint.endpointNumber}\n")
+                sb.append("endpoint0 interval: ${endpoint.interval}\n")
+                sb.append("endpoint0 maxPacketSize: ${endpoint.maxPacketSize}\n")
+                sb.append("endpoint0 type: ${endpoint.type}\n")
+            }
+            intf.getEndpoint(1)?.also { endpoint ->
+                sb.append("endpoint1 address: ${endpoint.address}\n")
+                sb.append("endpoint1 attributes: ${endpoint.attributes}\n")
+                sb.append("endpoint1 direction: ${endpoint.direction}\n")
+                sb.append("endpoint1 endpointNumber: ${endpoint.endpointNumber}\n")
+                sb.append("endpoint1 interval: ${endpoint.interval}\n")
+                sb.append("endpoint1 maxPacketSize: ${endpoint.maxPacketSize}\n")
+                sb.append("endpoint1 type: ${endpoint.type}\n")
+            }
             binding.statusText.text = sb.toString()
         }
     }
