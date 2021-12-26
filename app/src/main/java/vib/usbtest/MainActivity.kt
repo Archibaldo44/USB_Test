@@ -10,6 +10,7 @@ import android.hardware.usb.UsbManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import androidx.lifecycle.ViewModelProvider
 import vib.usbtest.databinding.ActivityMainBinding
 import java.lang.StringBuilder
 
@@ -20,10 +21,15 @@ private const val TAG = "usbTest"
 class MainActivity : AppCompatActivity() {
 
     private val aliveMessage: ByteArray = byteArrayOf(2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    private val ackMessage: ByteArray = byteArrayOf(2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     private val readVersion: ByteArray = byteArrayOf(2, 9, 0, 4, 0, 0, 0, 0, 0, 2, 3, 15, 0, 0)
 
     private lateinit var binding: ActivityMainBinding
+    private val mainViewModel: MainViewModel by lazy {
+        ViewModelProvider(this).get(MainViewModel::class.java)
+    }
     private lateinit var usbManager: UsbManager
+    private lateinit var protocolHandler: Assa950dProtocolHandler
 
     private var usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent) {
@@ -41,13 +47,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
+        protocolHandler = Assa950dProtocolHandler(usbManager)
 
         registerReceiver(usbReceiver, IntentFilter().apply {
             addAction(ACTION_USB_PERMISSION)
@@ -55,13 +61,11 @@ class MainActivity : AppCompatActivity() {
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
         })
 
-        binding.testButton.setOnClickListener {
-            printStatus()
+        binding.printButton.setOnClickListener {
+            binding.statusText.text = protocolHandler.getUsbDeviceInfo()
         }
-
-        binding.doButton.setOnClickListener {
-            doSomething()
-        }
+        binding.connectButton.setOnClickListener { connect() }
+        binding.doButton.setOnClickListener { doSomething() }
     }
 
     private fun onActionUsbPermission(broadcastReceiver: BroadcastReceiver) {
@@ -92,94 +96,13 @@ class MainActivity : AppCompatActivity() {
         binding.logText.text = "${existingText}\n${message}"
     }
 
-    private fun printStatus() {
-        val sb = StringBuilder()
-        sb.append("# of devices: ${usbManager.deviceList.size}\n")
-
-        val deviceList: HashMap<String, UsbDevice> = usbManager.deviceList
-        deviceList.forEach { (key, usbDevice) ->
-            sb.append("key: ${key}\n")
-            sb.append("id: ${usbDevice.deviceId} name: ${usbDevice.deviceName}\n")
-            sb.append("manufacturer: ${usbDevice.manufacturerName}\n")
-            sb.append("serial #: ${usbDevice.serialNumber}\n")
-            sb.append("VID: ${usbDevice.vendorId} PID: ${usbDevice.productId}\n")
-            sb.append("class: ${usbDevice.deviceClass} subclass: ${usbDevice.deviceSubclass}\n")
-            sb.append("protocol: ${usbDevice.deviceProtocol}\n")
-            sb.append("interfaceCount: ${usbDevice.interfaceCount}\n")
-        }
-
-        binding.statusText.text = sb.toString()
-    }
-
-    private fun printInterfaceAndEndpointsData(device: UsbDevice) {
-        device.getInterface(0).also { intf ->
-            val sb = StringBuilder()
-            sb.append("id: ${intf.id}\n")
-            sb.append("name: ${intf.name}\n")
-            sb.append("interfaceClass: ${intf.interfaceClass}\n")
-            sb.append("interfaceSubclass: ${intf.interfaceSubclass}\n")
-            sb.append("interfaceProtocol: ${intf.interfaceProtocol}\n")
-            sb.append("alternateSetting: ${intf.alternateSetting}\n")
-            sb.append("endpointCount: ${intf.endpointCount}\n")
-            sb.append("====\n")
-
-            intf.getEndpoint(0)?.also { endpoint ->
-                sb.append("endpoint0 address: ${endpoint.address}\n")
-                sb.append("endpoint0 attributes: ${endpoint.attributes}\n")
-                sb.append("endpoint0 direction: ${endpoint.direction}\n")
-                sb.append("endpoint0 endpointNumber: ${endpoint.endpointNumber}\n")
-                sb.append("endpoint0 interval: ${endpoint.interval}\n")
-                sb.append("endpoint0 maxPacketSize: ${endpoint.maxPacketSize}\n")
-                sb.append("endpoint0 type: ${endpoint.type}\n")
-            }
-            intf.getEndpoint(1)?.also { endpoint ->
-                sb.append("endpoint1 address: ${endpoint.address}\n")
-                sb.append("endpoint1 attributes: ${endpoint.attributes}\n")
-                sb.append("endpoint1 direction: ${endpoint.direction}\n")
-                sb.append("endpoint1 endpointNumber: ${endpoint.endpointNumber}\n")
-                sb.append("endpoint1 interval: ${endpoint.interval}\n")
-                sb.append("endpoint1 maxPacketSize: ${endpoint.maxPacketSize}\n")
-                sb.append("endpoint1 type: ${endpoint.type}\n")
-            }
-            binding.statusText.text = sb.toString()
-        }
+    private fun connect() {
+        val result = protocolHandler.connect()
+        addToLog(if (result) "Connected" else "Connection failed")
     }
 
     private fun doSomething() {
-        if (1 != usbManager.deviceList.size) {
-            addToLog("# of devices <> 1")
-            return
-        }
-        val key = usbManager.deviceList.keys.first()
-        val device = usbManager.deviceList[key]
-        if (device == null) {
-            addToLog("usbDevices == null")
-            return
-        }
-        printInterfaceAndEndpointsData(device)
-
-        val inEndpoint = device.getInterface(0).getEndpoint(0)
-        val outEndpoint = device.getInterface(0).getEndpoint(1)
-
-        val connection = usbManager.openDevice(device)
-        if (connection == null) {
-            addToLog("Error: connection is null!")
-            return
-        }
-        val claimResult = connection.claimInterface(device.getInterface(0), true)
-        if (!claimResult) {
-            addToLog("Error: claimInterface failed!")
-            connection.close()
-            return
-        }
-
-        var result = connection.bulkTransfer(outEndpoint, aliveMessage, aliveMessage.size, 0)
-        addToLog("alive result = $result")
-        result = connection.bulkTransfer(outEndpoint, readVersion, readVersion.size, 0)
-        addToLog("readVersion result = $result")
-
-        val response = ByteArray(64)
-        result = connection.bulkTransfer(inEndpoint, response, response.size, 3000)
-        addToLog("response result = $result")
+        val response = protocolHandler.sendCommand()
+        addToLog("response = ${response.toUByteString()}")
     }
 }
