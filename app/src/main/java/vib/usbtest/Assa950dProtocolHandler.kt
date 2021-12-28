@@ -3,8 +3,10 @@ package vib.usbtest
 import android.hardware.usb.*
 import android.util.Log
 import kotlinx.coroutines.*
+import java.lang.Runnable
 import java.lang.StringBuilder
-import kotlin.coroutines.CoroutineContext
+import android.hardware.usb.UsbRequest
+import java.nio.ByteBuffer
 
 private const val TAG = "Assa950dProtocolHandler"
 
@@ -65,8 +67,24 @@ class Assa950dProtocolHandler(
             return false
         }
 
-        // TODO: start sending alive heartbeat
+        //start sending alive heartbeat
         startHeartbeat()
+
+        Thread(object : Runnable {
+            override fun run() {
+                val usbRequest = UsbRequest()
+                while (true) {
+                    val buffer: ByteBuffer = ByteBuffer.allocate(64)
+                    usbRequest.initialize(usbConnection, inEndpoint)
+                    if (usbRequest.queue(buffer)) {
+                        if (usbConnection?.requestWait() === usbRequest) {
+                            val result = String(buffer.array())
+                            Log.i(TAG, "ASYNC RESULT: ${result} ")
+                        }
+                    }
+                }
+            }
+        }).start()
 
         return true
     }
@@ -149,24 +167,26 @@ class Assa950dProtocolHandler(
         stopHeartbeat()
         // send a command
 //        var result = usbConnection?.bulkTransfer(outEndpoint, readVersion, readVersion.size, 0)
-        var result = usbConnection?.bulkTransfer(outEndpoint, showActiveErrors, showActiveErrors.size, 0)
-        if (0 > result ?: -1 ) {
+        var result =
+            usbConnection?.bulkTransfer(outEndpoint, showActiveErrors, showActiveErrors.size, 0)
+        if (0 > result ?: -1) {
             Log.i(TAG, "Failed to send 'read version'.")
         }
         // receive a reply
-        val response = ByteArray(64)
-        result = usbConnection?.bulkTransfer(inEndpoint, response, response.size, 3000)
-        if (0 > result ?: -1 ) {
-            Log.i(TAG, "Failed to read a reply.")
-        }
+//        val response = ByteArray(64)
+//        result = usbConnection?.bulkTransfer(inEndpoint, response, response.size, 3000)
+//        if (0 > result ?: -1) {
+//            Log.i(TAG, "Failed to read a reply.")
+//        }
         // send ACK
-        result = usbConnection?.bulkTransfer(outEndpoint, ackMessage, ackMessage.size, 0)
-        if (0 > result ?: -1 ) {
-            Log.i(TAG, "Failed to send ACK.")
-        }
+//        result = usbConnection?.bulkTransfer(outEndpoint, ackMessage, ackMessage.size, 0)
+//        if (0 > result ?: -1) {
+//            Log.i(TAG, "Failed to send ACK.")
+//        }
         // start heartbeat
         startHeartbeat()
 
-        return response
+//        return response
+        return byteArrayOf(0, 1, 2, 3)
     }
 }
