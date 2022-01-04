@@ -13,9 +13,13 @@ import android.util.Log
 import androidx.lifecycle.ViewModelProvider
 import vib.usbtest.databinding.ActivityMainBinding
 import java.lang.StringBuilder
+import android.app.PendingIntent
 
-private const val ACTION_USB_PERMISSION = "com.android.example.USB_PERMISSION"
-private const val TAG = "usbTest"
+import android.R.attr.name
+import android.app.PendingIntent.FLAG_UPDATE_CURRENT
+
+private const val ACTION_USB_PERMISSION = "vib.usbtest.USB_PERMISSION"
+private const val TAG = "Assa950dProtocolHandler"
 
 @SuppressLint("SetTextI18n")
 class MainActivity : AppCompatActivity() {
@@ -30,23 +34,31 @@ class MainActivity : AppCompatActivity() {
     }
     private lateinit var usbManager: UsbManager
     private lateinit var protocolHandler: Assa950dProtocolHandler
+    private lateinit var permissionIntent: PendingIntent
 
     private var usbReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent) {
-            when {
-                ACTION_USB_PERMISSION == intent.action -> {
-                    onActionUsbPermission(this)
-                }
-                UsbManager.ACTION_USB_DEVICE_ATTACHED == intent.action -> {
-                    onActionUsbDeviceAttached()
-                }
-                UsbManager.ACTION_USB_DEVICE_DETACHED == intent.action -> {
-                    onActionUsbDeviceDetached()
+        override fun onReceive(context: Context, intent: Intent) {
+            if (ACTION_USB_PERMISSION == intent.action) {
+                synchronized(this) {
+                    val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                    Log.i(TAG, "onReceive: device = $device")
+                    val userReply =
+                        intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                    Log.i(TAG, "onReceive: userReply = $userReply")
+                    if (userReply) {
+                        device?.apply {
+                            //call method to set up device communication
+                            Log.d(TAG, "Permission GRANTED for device $device")
+                        }
+                    } else {
+                        Log.d(TAG, "permission denied for device $device")
+                    }
                 }
             }
         }
     }
 
+    @SuppressLint("UnspecifiedImmutableFlag")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -55,11 +67,15 @@ class MainActivity : AppCompatActivity() {
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
         protocolHandler = Assa950dProtocolHandler(usbManager)
 
-        registerReceiver(usbReceiver, IntentFilter().apply {
-            addAction(ACTION_USB_PERMISSION)
-            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
-            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
-        })
+//        registerReceiver(usbReceiver, IntentFilter().apply {
+//            addAction(ACTION_USB_PERMISSION)
+////            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+//            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+//        })
+
+        permissionIntent = PendingIntent.getBroadcast(this, 0, Intent(ACTION_USB_PERMISSION), 0)
+        val filter = IntentFilter(ACTION_USB_PERMISSION)
+        registerReceiver(usbReceiver, filter)
 
         binding.printButton.setOnClickListener {
             binding.statusText.text = protocolHandler.getUsbDeviceInfo()
@@ -68,37 +84,23 @@ class MainActivity : AppCompatActivity() {
         binding.doButton.setOnClickListener { doSomething() }
     }
 
-    private fun onActionUsbPermission(broadcastReceiver: BroadcastReceiver) {
-        addToLog("BroadcastReceiver.onActionUsbPermission")
-        synchronized(broadcastReceiver) {
-            val device: UsbDevice? = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-
-            if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                device?.apply {
-                    //call method to set up device communication
-                }
-            } else {
-                addToLog("permission denied for device $device")
-            }
-        }
-    }
-
-    private fun onActionUsbDeviceAttached() {
-        addToLog("BroadcastReceiver.onActionUsbDeviceAttached")
-    }
-
-    private fun onActionUsbDeviceDetached() {
-        addToLog("BroadcastReceiver.onActionUsbDeviceDetached")
-    }
-
     private fun addToLog(message: String) {
         val existingText = binding.logText.text
         binding.logText.text = "${existingText}\n${message}"
     }
 
     private fun connect() {
-        val result = protocolHandler.connect()
-        addToLog(if (result) "Connected" else "Connection failed")
+        val usbDevice = protocolHandler.getAssa950d()
+        if (usbDevice == null) {
+            addToLog("We are not connected to ASSA 950d.")
+            return
+        }
+        // check for permissions
+        usbManager.requestPermission(usbDevice, permissionIntent)
+
+        // try to connect to USB device
+        //val result = protocolHandler.connect()
+        //addToLog(if (result) "Connected" else "Connection failed")
     }
 
     private fun doSomething() {

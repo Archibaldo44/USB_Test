@@ -9,6 +9,8 @@ import android.hardware.usb.UsbRequest
 import java.nio.ByteBuffer
 
 private const val TAG = "Assa950dProtocolHandler"
+private const val VID = 1240
+private const val PID = 63
 
 class Assa950dProtocolHandler(
     private val usbManager: UsbManager
@@ -21,25 +23,34 @@ class Assa950dProtocolHandler(
 
     private var aliveJob: Job? = null
 
-    /** Connect to USB device and start sending "alive" message as heartbeat. */
-    fun connect(): Boolean {
+    /** Checks if the USB device we are connected to is ASSA 950d
+     *  and it has one interface and two endPoints of the proper type */
+    fun getAssa950d(): UsbDevice? {
+        Log.i(TAG, "getAssa950d")
         if (1 != usbManager.deviceList.size) {
             // fixme: inform user that there are more than 1 device
-            Log.e(TAG, "ERROR: UsbHidHandler.connect(), device number != 1.")
-            return false
+            Log.e(TAG, "ERROR: UsbHidHandler.connect(), device number != 1, it's ${usbManager.deviceList.size}")
+            return null
         }
-        usbDevice = usbManager.deviceList[usbManager.deviceList.keys.first()]
-        if (1 != usbDevice?.interfaceCount) {
+        val usbDevice = usbManager.deviceList[usbManager.deviceList.keys.first()]
+        if (usbDevice?.vendorId != VID || usbDevice.productId != PID) {
+            // fixme: inform user that there are more than 1 device
+            Log.e(TAG, "ERROR: UsbDevice is not ASSA 950d.")
+            return null
+        }
+        this.usbDevice = usbDevice
+
+        if (1 != usbDevice.interfaceCount) {
             // fixme: inform user that there are more than 1 interface
             Log.e(TAG, "ERROR: UsbHidHandler.connect(), number of interfaces != 1.")
-            return false
+            return null
         }
 
-        usbInterface = usbDevice?.getInterface(0)
+        usbInterface = usbDevice.getInterface(0)
         if (UsbConstants.USB_CLASS_HID != usbInterface?.interfaceClass) {
             // fixme: inform user about wrong interface
             Log.e(TAG, "ERROR: UsbHidHandler.connect(), interface class in not HID.")
-            return false
+            return null
         }
         for (i in 0 until (usbInterface?.endpointCount ?: -1)) {
             when (usbInterface?.getEndpoint(i)?.direction) {
@@ -50,8 +61,13 @@ class Assa950dProtocolHandler(
         if (inEndpoint == null && outEndpoint == null) {
             // fixme: inform user
             Log.e(TAG, "ERROR: UsbHidHandler.connect(), number of endpoints != 2.")
-            return false
+            return null
         }
+        return usbDevice
+    }
+
+    /** Connect to USB device and start sending "alive" message as heartbeat. */
+    fun connect(): Boolean {
 
         usbConnection = usbManager.openDevice(usbDevice)
         if (usbConnection == null) {
