@@ -19,7 +19,7 @@ import android.R.attr.name
 import android.app.PendingIntent.FLAG_UPDATE_CURRENT
 
 private const val ACTION_USB_PERMISSION = "vib.usbtest.USB_PERMISSION"
-private const val TAG = "Assa950dProtocolHandler"
+private const val TAG = "vitDebug"
 
 @SuppressLint("SetTextI18n")
 class MainActivity : AppCompatActivity() {
@@ -78,6 +78,7 @@ class MainActivity : AppCompatActivity() {
         registerReceiver(usbReceiver, filter)
 
         binding.printButton.setOnClickListener {
+            Log.i("vitDebug", "usbManager.size ${usbManager.deviceList.size}")
             binding.statusText.text = protocolHandler.getUsbDeviceInfo()
         }
         binding.connectButton.setOnClickListener { connect() }

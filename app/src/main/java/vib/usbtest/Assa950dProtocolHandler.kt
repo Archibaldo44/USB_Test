@@ -132,6 +132,12 @@ class Assa950dProtocolHandler(
     /** For testing/debugging. Gets USB device info. */
     fun getUsbDeviceInfo(): String {
         val sb = StringBuilder()
+
+        for ((key, device) in usbManager.deviceList) {
+            sb.append("key: $key device: ${device.deviceName}\n")
+        }
+        sb.append("==================\n")
+
         sb.append("# of devices: ${usbManager.deviceList.size}\n====\n")
 
         usbDevice?.let {
